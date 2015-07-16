@@ -18,12 +18,20 @@ var sqs = new AWS.SQS(),
 console.log('CloudSnapController: Polling queue ' + sqs_queue_url);
 console.log('CloudSnapController: Sending images to ' + s3_bucket_name);
 
+var busy = false;
+
 setInterval(function () {
-    mainLoop()
+    fetchAndProcess()
 }, 1000);
 
-function mainLoop() {
+function fetchAndProcess() {
     async.waterfall([
+            function checkBusyness(next) {
+                if (busy == false) {
+                    busy = true;
+                    next(null);
+                }
+            },
             function fetchMessage(next) {
                 sqs.receiveMessage({
                     QueueUrl: sqs_queue_url,
@@ -43,6 +51,7 @@ function mainLoop() {
                     });
                 } else {
                     console.log('No message available');
+                    busy = false;
                 }
             },
             function processCommand(body, next) {
@@ -52,7 +61,7 @@ function mainLoop() {
             function captureImage(body, next) {
                 console.log('Capturing image');
                 var filename = '/home/pi/images/' + body.requestid + '.jpg';
-                exec('raspistill -o ' + filename + ' -w 1920 -h 1080 -q 15',function(err) {
+                exec('raspistill -o ' + filename + ' -w 1920 -h 1080 -q 15', function (err) {
                     next(err, body.requestid, filename);
                 });
             },
@@ -66,6 +75,10 @@ function mainLoop() {
                     StorageClass: 'REDUCED_REDUNDANCY',
                     Body: fs.createReadStream(imagefile)
                 }, next);
+            },
+            function unsetBusy(next) {
+                busy = false;
+                next;
             }
         ], function (err) {
             if (err) {
