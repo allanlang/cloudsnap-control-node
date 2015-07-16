@@ -1,6 +1,7 @@
 var AWS = require('aws-sdk'),
     async = require('async'),
     fs = require('fs'),
+    exec = require('child_process').exec,
     sqs_queue_url = process.argv[2],
     s3_bucket_name = process.argv[3];
 
@@ -50,7 +51,10 @@ function mainLoop() {
             },
             function captureImage(body, next) {
                 console.log('Capturing image');
-                next(null, body.requestid, 'sample-image.jpg');
+                var filename = '/home/pi/images/' + body.requestid + '.jpg';
+                exec('raspistill -o ' + filename + ' -w 1920 -h 1080 -q 15',function(err) {
+                    next(err, body.requestid, filename);
+                });
             },
             function uploadImage(requestid, imagefile, next) {
                 console.log('Uploading image with key ' + requestid + '.jpg');
